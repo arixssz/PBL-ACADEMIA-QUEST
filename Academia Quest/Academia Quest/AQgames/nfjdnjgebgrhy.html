@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Multi-Scene Game</title>
+  <style>
+    canvas {
+      background: #eee;
+      display: block;
+      margin: 20px auto;
+      border: 2px solid #000;
+    }
+    #shopUI {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .item-button {
+      margin: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width=" windowWidth" height="windowHeight"></canvas>
+
+<div id="shopUI">
+  <h2>🧔 Welcome to the Shop!</h2>
+  <p id="shopMoneyInfo"></p>
+  <div id="itemButtons"></div>
+  <button onclick="confirmPurchase()">Confirm Purchase</button>
+  <button onclick="exitShop()">Exit Shop</button>
+  <p id="shopMessage"></p>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const player = { x: 50, y: 50, size: 20, color: "blue" };
+let totalPoints = 0;
+let totalMoney = 0;
+const moneyValue = 10;
+let message = "Use arrows to move. Enter portals!";
+
+let currentScene = "main";
+const scenes = {
+  main: { name: "Main Area", portals: ["forest", "cave", "shop"], minigame: null },
+  forest: { name: "Forest", portals: ["main"], minigame: "quiz" },
+  cave: { name: "Cave", portals: ["main"], minigame: "puzzle" },
+  shop: { name: "Shop", portals: ["main"], minigame: null }
+};
+
+let portals = [];
+const shopItems = [
+  { name: "Potion", price: 15, subject: "English", question: "Which one is a verb?\na) Beautiful\nb) Run\nc) Red", answer: "b" },
+  { name: "Shield", price: 20, subject: "Malay", question: "Yang manakah kata nama?\na) Makan\nb) Kerusi\nc) Indah", answer: "b" },
+  { name: "USB Stick", price: 25, subject: "Computer Science", question: "What does <p> tag represent in HTML?\na) Paragraph\nb) Page\nc) Picture", answer: "a" }
+];
+let shoppingList = [];
+let selectedItems = [], boughtItems = [];
+
+function generateShoppingList() {
+  const possibleItems = shopItems.map(i => i.name);
+  shoppingList = [];
+  while (shoppingList.length < 3) {
+    const rand = possibleItems[Math.floor(Math.random() * possibleItems.length)];
+    if (!shoppingList.includes(rand)) shoppingList.push(rand);
+  }
+}
+setInterval(generateShoppingList, 1800000); // 30 mins
+generateShoppingList();
+
+document.addEventListener("keydown", movePlayer);
+function movePlayer(e) {
+  const speed = 10;
+  if (e.key === "ArrowUp") player.y -= speed;
+  if (e.key === "ArrowDown") player.y += speed;
+  if (e.key === "ArrowLeft") player.x -= speed;
+  if (e.key === "ArrowRight") player.x += speed;
+
+  checkCollisions();
+  drawGame();
+}
+
+function checkCollisions() {
+  portals.forEach(p => {
+    if (isColliding(player, p)) {
+      if (scenes[p.target].minigame) launchMinigame(scenes[p.target].minigame);
+      else switchScene(p.target);
+    }
+  });
+}
+
+function isColliding(a, b) {
+  return (
+    a.x < b.x + b.size &&
+    a.x + a.size > b.x &&
+    a.y < b.y + b.size &&
+    a.y + a.size > b.y
+  );
+}
+
+function drawGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, player.y, player.size, player.size);
+
+  portals.forEach(p => {
+    ctx.fillStyle = "purple";
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+    ctx.fillStyle = "white";
+    ctx.fillText(p.target.toUpperCase(), p.x + 2, p.y + 15);
+  });
+
+  ctx.fillStyle = "black";
+  ctx.font = "16px Arial";
+  ctx.fillText(message, 10, canvas.height - 10);
+  ctx.fillText(`Points: ${totalPoints}`, 400, 20);
+}
+
+function switchScene(name) {
+  currentScene = name;
+  player.x = 50;
+  player.y = 50;
+  message = `Entered ${scenes[name].name}`;
+  setupPortals();
+  drawGame();
+}
+
+function setupPortals() {
+  portals = scenes[currentScene].portals.map((target, i) => ({
+    x: 100 + i * 120, y: 300, size: 30, target
+  }));
+}
+
+function launchMinigame(type) {
+  let correct = confirm(`Minigame: ${type}! Click OK if you solve it!`);
+  if (correct) {
+    totalPoints += 10;
+    alert("+10 points!");
+  } else {
+    alert("Try again later!");
+  }
+  switchScene("main");
+}
+
+function enterShopScene() {
+  currentScene = "shop";
+  canvas.style.display = "none";
+  document.getElementById("shopUI").style.display = "block";
+  document.getElementById("shopMoneyInfo").textContent = `You have ${totalPoints} points`;
+  const itemButtonsDiv = document.getElementById("itemButtons");
+  itemButtonsDiv.innerHTML = "";
+  selectedItems = [];
+  alert("Shopping List:\n" + shoppingList.join("\n"));
+
+  shopItems.forEach((item, index) => {
+    const btn = document.createElement("button");
+    btn.className = "item-button";
+    btn.textContent = `${item.name} - ${item.price} pts`;
+    btn.onclick = () => {
+      if (!selectedItems.includes(index)) {
+        selectedItems.push(index);
+        btn.style.background = "lightgreen";
+      }
+    };
+    itemButtonsDiv.appendChild(btn);
+  });
+}
+
+function confirmPurchase() {
+  const chosenItems = selectedItems.map(i => shopItems[i]);
+  const totalPrice = chosenItems.reduce((sum, item) => sum + item.price, 0);
+  if (totalPoints < totalPrice) {
+    document.getElementById("shopMessage").textContent = `Need ${totalPrice} pts but have ${totalPoints}`;
+    return;
+  }
+
+  for (let item of chosenItems) {
+    const ans = prompt(`Subject: ${item.subject}\n${item.question}`);
+    if (!ans || ans.toLowerCase() !== item.answer.toLowerCase()) {
+      document.getElementById("shopMessage").textContent = `Wrong answer for ${item.name}`;
+      return;
+    }
+  }
+
+  totalPoints -= totalPrice;
+  boughtItems.push(...chosenItems);
+  message = `Bought: ${chosenItems.map(i => i.name).join(", ")}`;
+  exitShop();
+}
+
+function exitShop() {
+  canvas.style.display = "block";
+  document.getElementById("shopUI").style.display = "none";
+  switchScene("main");
+}
+
+setupPortals();
+drawGame();
+</script>
+
+</body>
+</html>
